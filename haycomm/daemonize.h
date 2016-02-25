@@ -1,5 +1,10 @@
 #pragma once
 
-namespace HayUtils {
+#include <string>
+
+using std::string;
+
+namespace HayComm {
     int Daemonize(bool bChDir=true, bool bInOutErrNull=true);
+    int RedirectFd(int iFd, const string & sRediectPath);
 }

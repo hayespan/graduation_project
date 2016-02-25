@@ -6,3 +6,4 @@
 bin/
 solib/*
 lib/*
+test

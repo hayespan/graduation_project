@@ -1,10 +1,10 @@
 include ../Makefile.comm
 
-OBJECTS = daemonize.o
+OBJECTS = daemonize.o time_util.o log.o lockguard.o
 
 DYNAMIC_LIBS = libhaycomm.so
 STATIC_LIBS = libhaycomm.a
-TESTS = test_daemonize
+TESTS = test
 
 all: $(DYNAMIC_LIBS) $(STATIC_LIBS) $(TESTS)
 
@@ -14,8 +14,9 @@ libhaycomm.so: $(OBJECTS)
 libhaycomm.a: $(OBJECTS)
 	$(AR_STATIC)
 
-test_daemonize: DEPS = -L$(DYNAMIC_DIR) -lhaycomm
-test_daemonize: test_daemonize.o
+test: $(DYNAMIC_LIBS) $(STATIC_LIBS)
+test: DEPS = -L$(DYNAMIC_DIR) -lhaycomm
+test: test.o
 	$(CXX_EXE)
 
 .PHONY: clean

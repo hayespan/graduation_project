@@ -6,7 +6,7 @@
 
 #include "daemonize.h"
 
-namespace HayUtils {
+namespace HayComm {
 
 const char * pszRedirectPath = "/dev/null";
 
@@ -37,17 +37,27 @@ int Daemonize(bool bChDir/*true*/, bool bInOutErrNull/*true*/) {
         }
     }
     if (bInOutErrNull) {
-        int iFd = open(pszRedirectPath, 
-                S_IRUSR|S_IWUSR|
-                S_IRGRP|S_IWGRP|
-                S_IROTH|S_IWOTH
-                );
-        if (iFd == -1) {
-            return -5;
-        }
-        dup2(iFd, STDIN_FILENO);
-        dup2(iFd, STDOUT_FILENO);
-        dup2(iFd, STDERR_FILENO);
+        RedirectFd(STDIN_FILENO, pszRedirectPath);
+        RedirectFd(STDOUT_FILENO, pszRedirectPath);
+        RedirectFd(STDERR_FILENO, pszRedirectPath);
+    }
+    return 0;
+}
+
+int RedirectFd(int iFd, const string & sRediectPath) {
+    if (access(sRediectPath.c_str(), F_OK) == -1) {
+        return -1;
+    }
+    int iRedirectFd = open(sRediectPath.c_str(), 
+            S_IRUSR|S_IWUSR|
+            S_IRGRP|S_IWGRP|
+            S_IROTH|S_IWOTH
+            );
+    if (iRedirectFd == -1) {
+        return -2;
+    }
+    if (dup2(iRedirectFd, iFd) == -1) {
+        return -3;
     }
     return 0;
 }
