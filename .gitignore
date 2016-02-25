@@ -1,0 +1,8 @@
+*.so
+*.a
+*.swp
+*.swo
+*.o
+bin/
+solib/*
+lib/*

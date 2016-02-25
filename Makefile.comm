@@ -1,0 +1,32 @@
+CXX = g++
+CC = gcc
+
+DEBUG_MODE = 1
+ROOT_DIR = /home/panhzh3/file/graduation_project
+DYNAMIC_DIR = $(ROOT_DIR)/solib
+STATIC_DIR = $(ROOT_DIR)/lib
+
+CFLAGS = -Wall -pipe 
+CXXFLAGS = -Wall -pipe
+
+ifeq ($(DEBUG_MODE),1)
+	CFLAGS += -g
+	CXXFLAGS += -g
+else
+	CFLAGS += -O3
+	CXXFLAGS += -O3
+endif
+
+DEPS = 
+
+# executable
+CXX_EXE = $(CXX) $(CXXFLAGS) -o $@ $< $(DEPS)
+C_EXE = $(CC) $(CFLAGS) -o $@ $< $(DEPS)
+
+#dynamic lib
+CXX_DYNAMIC = @echo 'compiling...'; $(CXX) -shared -fPIC -o $@ $< $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynmaic ok';
+C_DYNAMIC = @echo 'compiling...'; $(CC) -shared -fPIC -o $@ $< $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynamic ok';
+
+#static lib
+AR_STATIC = @echo 'compiling...'; ar rcs $@ $<; cp -f $@ $(STATIC_DIR)/$@; echo 'static ok';
+
