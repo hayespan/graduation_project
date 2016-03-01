@@ -1,6 +1,6 @@
 include ../Makefile.comm
 
-OBJECTS = daemonize.o time_util.o log.o lockguard.o
+OBJECTS = daemonize.o time_util.o log.o lockguard.o config.o 
 
 DYNAMIC_LIBS = libhaycomm.so
 STATIC_LIBS = libhaycomm.a
@@ -14,8 +14,7 @@ libhaycomm.so: $(OBJECTS)
 libhaycomm.a: $(OBJECTS)
 	$(AR_STATIC)
 
-test: $(DYNAMIC_LIBS) $(STATIC_LIBS)
-test: DEPS = -L$(DYNAMIC_DIR) -lhaycomm
+test: DEPS = -L$(DYNAMIC_DIR) -lhaycomm 
 test: test.o
 	$(CXX_EXE)
 

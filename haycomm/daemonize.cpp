@@ -19,6 +19,7 @@ int Daemonize(bool bChDir/*true*/, bool bInOutErrNull/*true*/) {
         default:
             _exit(0);
     }
+    umask(0);
     int iRet = setsid();
     if (iRet < 0) {
         return -2;

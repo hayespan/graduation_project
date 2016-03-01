@@ -17,7 +17,7 @@
     void TEST_FUNC_##name()
 
 #define TEST_ASSERT(cond) do { \
-        if (!(cond)) throw 0; \
+        if (!(cond)) {std::cout << "fail line[" << __LINE__ << "]" << std::endl; throw 0;} \
     } while (0);
 
 #define TEST_PRINT(msg) std::cout << (msg) << std::endl;

@@ -18,14 +18,15 @@ else
 endif
 
 DEPS = 
+INCLS = 
 
 # executable
-CXX_EXE = $(CXX) $(CXXFLAGS) -o $@ $^ $(DEPS)
-C_EXE = $(CC) $(CFLAGS) -o $@ $^ $(DEPS)
+CXX_EXE = $(CXX) $(CXXFLAGS) -o $@ $^ $(INCLS) $(DEPS)
+C_EXE = $(CC) $(CFLAGS) -o $@ $^ $(INCLS) $(DEPS)
 
 #dynamic lib
-CXX_DYNAMIC = @echo 'compiling...'; $(CXX) -shared -fPIC -o $@ $^ $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynmaic ok';
-C_DYNAMIC = @echo 'compiling...'; $(CC) -shared -fPIC -o $@ $^ $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynamic ok';
+CXX_DYNAMIC = @echo 'compiling...'; $(CXX) -shared -fPIC -o $@ $^ $(INCLS) $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynmaic ok';
+C_DYNAMIC = @echo 'compiling...'; $(CC) -shared -fPIC -o $@ $^ $(INCLS) $(DEPS); cp -f $@ $(DYNAMIC_DIR)/$@; echo 'dynamic ok';
 
 #static lib
 AR_STATIC = @echo 'compiling...'; ar rcs $@ $^; cp -f $@ $(STATIC_DIR)/$@; echo 'static ok';

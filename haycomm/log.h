@@ -20,7 +20,7 @@ namespace HayComm {
 
     class Log {
     public:
-        Log(const string & sLogDirPath="/tmp/haycomm/log");
+        Log(const string & sLogDirPath="/var/haycomm/log");
         int SetLogDirPath(const string & sLogDirPath);
         int SetLogLevel(int iLevel);
         int log(int iLevel, const char * pszFormat, ...);
