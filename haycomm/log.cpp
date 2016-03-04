@@ -20,13 +20,14 @@ namespace HayComm {
 
     const char * g_ArrLogLevelStr[] = {
         "INFO",
-        "WARN",
+        "FATAL",
         "ERR",
+        "WARN",
         "DBG",    
     };
 
     Log::Log(const string & sLogDirPath) 
-        :m_iLogFd(-1), m_iLogLevel(LogLevel::LOG_ERR) {
+        :m_iLogFd(-1), m_iLogLevel(LogLevel::LOG_WARN) {
         m_sLogFileName = GetDefaultLogFileName();
         m_sLogDirPath = sLogDirPath;
         pthread_mutex_init(&m_tLock, NULL);
@@ -42,8 +43,9 @@ namespace HayComm {
     int Log::SetLogLevel(int iLogLevel) {
         switch (iLogLevel) {
             case LogLevel::LOG_INFO:
-            case LogLevel::LOG_WARN:
+            case LogLevel::LOG_FATAL:
             case LogLevel::LOG_ERR:
+            case LogLevel::LOG_WARN:
             case LogLevel::LOG_DBG:
                 break;
             default:

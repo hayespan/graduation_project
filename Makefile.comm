@@ -19,6 +19,8 @@ endif
 
 DEPS = 
 INCLS = 
+LDFLAGS = 
+LIBS = 
 
 # executable
 CXX_EXE = $(CXX) $(CXXFLAGS) -o $@ $^ $(INCLS) $(DEPS)

@@ -12,8 +12,9 @@ namespace HayComm {
     struct LogLevel {
         enum {
             LOG_INFO,
-            LOG_WARN,
+            LOG_FATAL,
             LOG_ERR,
+            LOG_WARN,
             LOG_DBG,
         };
     };

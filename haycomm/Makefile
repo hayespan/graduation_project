@@ -1,6 +1,6 @@
 include ../Makefile.comm
 
-OBJECTS = daemonize.o time_util.o log.o lockguard.o config.o 
+OBJECTS = daemonize.o time_util.o log.o lockguard.o config.o string_util.o
 
 DYNAMIC_LIBS = libhaycomm.so
 STATIC_LIBS = libhaycomm.a

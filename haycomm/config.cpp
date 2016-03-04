@@ -28,24 +28,8 @@ namespace HayComm {
         return 0;
     }
 
-    Body & Config::GetConfigBody() {
-        return m_oBody;
-    }
-
-    int Config::GetValue(const string & sSectionName, const string & sKeyName, string & sValue) {
-        sValue = "";
-        for (size_t i=0; i<m_oBody.size(); ++i) {
-            if (m_oBody[i].first == sSectionName) {
-                Section & oSection = m_oBody[i];
-                for (size_t j=0; j<oSection.second.size(); ++j) {
-                    if (oSection.second[j].first == sKeyName) {
-                        sValue = oSection.second[j].second;
-                        return 0;
-                    }
-                }
-            }
-        }
-        return -1;
+    string Config::GetConfigFilePath() const {
+        return m_sFileName;
     }
 
     int Config::UpdateConfigFile(const string & sOthFileName) {
@@ -92,6 +76,28 @@ WRITE_ERR:
         fclose(pForWrite);
         return -2;
     }
+
+
+    int Config::GetValue(const string & sSectionName, const string & sKeyName, string & sValue) {
+        sValue = "";
+        for (size_t i=0; i<m_oBody.size(); ++i) {
+            if (m_oBody[i].first == sSectionName) {
+                Section & oSection = m_oBody[i];
+                for (size_t j=0; j<oSection.second.size(); ++j) {
+                    if (oSection.second[j].first == sKeyName) {
+                        sValue = oSection.second[j].second;
+                        return 0;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
+    Body & Config::GetConfigBody() {
+        return m_oBody;
+    }
+
 
     int Config::ParseConfigFile(FILE * pFilePtr, Body & oBody) {
         if (!pFilePtr) return -1;
@@ -234,3 +240,4 @@ PARSER_ERR:
         return &((*pSection).second.back());
     }
 }
+
