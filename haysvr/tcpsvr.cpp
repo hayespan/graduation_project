@@ -5,7 +5,8 @@
 // TcpSvrOption
 TcpSvrOption::TcpSvrOption() {
     iPort = -1;
-    int iCpuCnt = sysconf(_SC_NPROCESSORS_ONLN);
+    // from http://stackoverflow.com/questions/4586405/get-number-of-cpus-in-linux-using-c
+    int iCpuCnt = sysconf(_SC_NPROCESSORS_ONLN); 
     iMasterCnt = iCpuCnt;
     iWorkerCnt = iCpuCnt * 2;
 }

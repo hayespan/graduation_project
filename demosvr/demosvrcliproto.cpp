@@ -21,27 +21,27 @@ int DemosvrCliProto::Echo(TcpChannel & oTcpChannel, const EchoRequest & req, Ech
     iRet = ToBuf(req, inbuf);
     if (iRet < 0) {
         HayLog(LOG_ERR, "%s %s inbuf serilize fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return HaysvrErrno::SerilizeInbuf;
     }
     iRet = ToBuf(resp, outbuf);
     if (iRet < 0) {
         HayLog(LOG_ERR, "%s %s outbuf serilize fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return HaysvrErrno::SerilizeOutbuf;
     }
     // do call
     iRet = DoProtoCall(oTcpChannel, DemosvrMethodCmd::Echo, inbuf, outbuf);
     if (iRet < 0) {
         HayLog(LOG_ERR, "%s %s DoProtoCall fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return HaysvrErrno::ClientCall;
     }
     // frombuf
     iRet = FromBuf(resp, outbuf);
     if (iRet < 0) {
         HayLog(LOG_ERR, "%s %s outbuf deserilize fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return HaysvrErrno::DeSerilizeOutbuf;
     }
     return HaysvrErrno::Ok;

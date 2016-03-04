@@ -23,7 +23,7 @@ void Haysvr::InitSvr(const string & sSvrConfigPath, TcpSvr * pTcpSvr, HaysvrDisp
             !pDispatcher ||
             !pTcpSvr) {
         HayLog(LOG_FATAL, "%s %s svr parameters error.",
-                __FILE__, __func__);
+                __FILE__, __PRETTY_FUNCTION__);
         exit(EXIT_FAILURE);
     }
     m_sSvrConfigPath = sSvrConfigPath;
@@ -32,7 +32,7 @@ void Haysvr::InitSvr(const string & sSvrConfigPath, TcpSvr * pTcpSvr, HaysvrDisp
     int iRet = 0;
     if ((iRet=LoadConfig(sSvrConfigPath)) < 0) {
         HayLog(LOG_FATAL, "%s %s init server config fail. ret[%d]", 
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         // exit if init fail
         exit(EXIT_FAILURE);
     }
@@ -53,7 +53,7 @@ int Haysvr::LoadConfig(const string & sOthConfigPath) {
     // init config
     if ((iRet=m_oConfig.InitConfigFile(m_sSvrConfigPath)) < 0) {
         HayLog(LOG_FATAL, "%s %s InitConfigFile fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         if (m_pTcpSvr) {
             m_pTcpSvr->SetSvrOption(NULL);
         }
@@ -103,7 +103,7 @@ void Haysvr::Singleton() {
 }
 
 void Haysvr::Run() {
-    HayLog(LOG_INFO, "%s %s tcp svr running...", __FILE__, __func__);
+    HayLog(LOG_INFO, "%s %s tcp svr running...", __FILE__, __PRETTY_FUNCTION__);
     m_pTcpSvr->Run();
 }
 

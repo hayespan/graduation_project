@@ -22,11 +22,11 @@ int DemosvrClient::Echo(const string & sMsgIn, string & sMsgOut) {
     iRet = ((DemosvrCliProto &)GetCliProto()).Echo(oTcpChannel, req, resp);
     if (iRet < 0) { // haysvr err
         HayLog(LOG_ERR, "%s %s cliproto fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return -1;
     } else if ((iRet=GetCliProto().GetResponseCode()) < 0) { // user err
         HayLog(LOG_ERR, "%s %s fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return -2;
     }
     // succ

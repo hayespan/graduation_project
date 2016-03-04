@@ -13,13 +13,13 @@ int DemosvrDispatcher::DoDispatch(int iCmd, const HayBuf & inbuf, HayBuf & outbu
         iRet = FromBuf(req, inbuf); 
         if (iRet < 0) {
             HayLog(LOG_ERR, "%s %s inbuf deserilize fail. ret[%d]",
-                    __FILE__, __func__, iRet);
+                    __FILE__, __PRETTY_FUNCTION__, iRet);
             return HaysvrErrno::DeSerilizeInbuf;
         }
         iRet = FromBuf(resp, outbuf);
         if (iRet < 0) {
             HayLog(LOG_ERR, "%s %s outbuf deserilize fail. ret[%d]", 
-                    __FILE__, __func__, iRet);
+                    __FILE__, __PRETTY_FUNCTION__, iRet);
             return HaysvrErrno::DeSerilizeOutbuf;
         }
         // service
@@ -28,7 +28,7 @@ int DemosvrDispatcher::DoDispatch(int iCmd, const HayBuf & inbuf, HayBuf & outbu
         iRet = ToBuf(resp, outbuf);
         if (iRet < 0) {
             HayLog(LOG_ERR, "%s %s outbuf serilize fail. ret[%d]",
-                    __FILE__, __func__, iRet);
+                    __FILE__, __PRETTY_FUNCTION__, iRet);
             return HaysvrErrno::SerilizeOutbuf;
         }
     } else {

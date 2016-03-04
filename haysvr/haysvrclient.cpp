@@ -18,7 +18,7 @@ void HaysvrClient::InitClient(const string & sCliConfigPath, HaysvrCliProto * pC
 
     if (sCliConfigPath.empty() ||
             !pCliProto) {
-        HayLog(LOG_FATAL, "%s %s parameters error.", __FILE__, __func__);
+        HayLog(LOG_FATAL, "%s %s parameters error.", __FILE__, __PRETTY_FUNCTION__);
     }
     m_sCliConfigPath = sCliConfigPath;
     m_pCliProto = pCliProto;
@@ -26,7 +26,7 @@ void HaysvrClient::InitClient(const string & sCliConfigPath, HaysvrCliProto * pC
     int iRet = 0;
     if ((iRet=LoadConfig()) < 0) {
         HayLog(LOG_FATAL, "%s %s init client config fail. ret[%d]", 
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         return;
     }
 }
@@ -43,7 +43,7 @@ int HaysvrClient::LoadConfig(const string & sOthConfigPath) {
     // init config
     if ((iRet=m_oConfig.InitConfigFile(m_sCliConfigPath)) < 0) {
         HayLog(LOG_FATAL, "%s %s InitConfigFile fail. ret[%d]",
-                __FILE__, __func__, iRet);
+                __FILE__, __PRETTY_FUNCTION__, iRet);
         // if LoadConfig fails, set cliprotooption ptr to be NULL
         // then m_pCliProto won't work
         m_pCliProto->SetCliProtoOption(NULL);
