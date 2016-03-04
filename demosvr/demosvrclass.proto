@@ -1,0 +1,10 @@
+package DemosvrClasses;
+
+message EchoRequest {
+    required string msg = 1;
+}
+
+message EchoResponse {
+    required string msg = 1;
+    required int32 var = 2;
+}

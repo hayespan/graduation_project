@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "log.h"
+#include "file.h"
 #include "time_util.h"
 #include "lockguard.h"
 
@@ -17,6 +18,8 @@ extern char *program_invocation_short_name;
 namespace HayComm {
 
     using HayComm::LockGuard;
+
+    Log g_Logger;
 
     const char * g_ArrLogLevelStr[] = {
         "INFO",
@@ -71,6 +74,10 @@ namespace HayComm {
             // check log fd, create if not exists
             string sFullPath = m_sLogDirPath + "/" + m_sLogFileName;
             if (m_iLogFd < 0) {
+                if (access(m_sLogDirPath.c_str(), F_OK) == -1) {
+                    // try create dir
+                    HayComm::MakeDirsRecursive(m_sLogDirPath, S_IRWXU);
+                }
                 m_iLogFd = open(sFullPath.c_str(), 
                         O_CREAT|O_RDWR|O_APPEND,
                         S_IRUSR|S_IWUSR|
@@ -89,7 +96,7 @@ namespace HayComm {
         const int iBufLen = 10240;
         char lsBuf[iBufLen];
         int iLen1 = snprintf(lsBuf, iBufLen, 
-                "[%s]%s(%d|%d) %s: ",
+                "%s %s (%d|%d) %s: ",
                 program_invocation_short_name,
                 Timestamp2Str(GetNowTimestamp()).c_str(),
                 iPid,

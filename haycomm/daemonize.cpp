@@ -1,10 +1,14 @@
-#include <cstdio>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "daemonize.h"
+#include "file.h"
 
 namespace HayComm {
 
@@ -60,6 +64,31 @@ int RedirectFd(int iFd, const string & sRediectPath) {
     if (dup2(iRedirectFd, iFd) == -1) {
         return -3;
     }
+    return 0;
+}
+
+int Singleton(const string & sPidPath, int iPid) {
+    int iFd = open(sPidPath.c_str(), O_RDWR|O_CREAT,
+            S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH); 
+    if (iFd < 0) {
+        return -1;
+    }
+    if (HayComm::LockFile(iFd) < 0) {
+        if (errno == EACCES || errno == EAGAIN) {
+            // already lock
+            close(iFd);
+            return -2;
+        }
+        // other error
+        close(iFd);
+        return -3;
+    }
+    ftruncate(iFd, 0);
+    char lsBuf[16] = {0};
+    sprintf(lsBuf, "%ld", (long)iPid);
+    write(iFd, lsBuf, strlen(lsBuf)+1);
+    fsync(iFd);
+    // here cannot close fd
     return 0;
 }
 
