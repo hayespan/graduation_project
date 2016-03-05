@@ -37,7 +37,7 @@ namespace HayComm {
         fl.l_start = 0;
         fl.l_whence = SEEK_SET;
         fl.l_len = 0;
-        return(fcntl(iFd, F_SETLK, &fl));
+        return (fcntl(iFd, F_SETLK, &fl));
     }
 
     int SetNonblocking(int iFd) {

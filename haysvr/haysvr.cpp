@@ -97,13 +97,20 @@ void Haysvr::Singleton() {
     const string sPidPath = "/tmp";
     extern char *program_invocation_short_name;
     string sFullPath = sPidPath + "/" + program_invocation_short_name + ".pid";
-    if (HayComm::Singleton(sPidPath, getpid()) < 0) {
+    int iRet = 0;
+    if ((iRet=HayComm::Singleton(sFullPath, getpid())) < 0) {
+        HayLog(LOG_FATAL, "haysvr Singleton fail. ret[%d]",
+                iRet);
         exit(EXIT_FAILURE);
     }
 }
 
 void Haysvr::Run() {
-    HayLog(LOG_INFO, "%s %s tcp svr running...", __FILE__, __PRETTY_FUNCTION__);
+    Daemonize();
+    HayLog(LOG_INFO, "haysvr daemonize succ.");
+    Singleton();
+    HayLog(LOG_INFO, "haysvr Singleton succ.");
+    HayLog(LOG_INFO, "haysvr tcp svr running...", __FILE__, __PRETTY_FUNCTION__);
     m_pTcpSvr->Run();
 }
 
