@@ -10,6 +10,8 @@ int main(int argc, char ** argv) {
     TcpSvr oTcpSvr;
 
     Haysvr oSvr(sSvrConfigPath, &oTcpSvr, &oDispatcher);
+    oSvr.Daemonize();
+    //oSvr.Singleton();
     oSvr.Run();
 
     return 0;

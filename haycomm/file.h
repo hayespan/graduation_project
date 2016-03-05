@@ -11,5 +11,7 @@ namespace HayComm {
     int MakeDirsRecursive(const string & sDirPath, mode_t iMode=S_IRWXU);
 
     int LockFile(int iFd);
+
+    int SetNonblocking(int iFd);
 };
 

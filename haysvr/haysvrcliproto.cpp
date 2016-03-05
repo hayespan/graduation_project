@@ -1,5 +1,4 @@
-#include "haycomm/haylog.h"
-
+#include "haylog.h"
 #include "haysvrcliproto.h"
 #include "haysvrerrno.h"
 

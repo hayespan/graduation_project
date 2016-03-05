@@ -1,4 +1,4 @@
-#include "haycomm/haylog.h"
+#include "haysvr/haylog.h"
 #include "haysvr/haysvrerrno.h"
 
 #include "demosvrcliproto.h"

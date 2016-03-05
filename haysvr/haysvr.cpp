@@ -3,10 +3,10 @@
 #include <unistd.h>
 
 
-#include "haycomm/haylog.h"
 #include "haycomm/string_util.h"
 #include "haycomm/daemonize.h"
 
+#include "haylog.h"
 #include "haysvr.h"
 #include "haysvrerrno.h"
 

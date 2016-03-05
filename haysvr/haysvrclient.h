@@ -1,8 +1,8 @@
 #pragma once
 
+#include "haylog.h"
 #include "haysvrcliproto.h"
 
-#include "haycomm/haylog.h"
 #include "haycomm/config.h"
 
 class HaysvrClient {

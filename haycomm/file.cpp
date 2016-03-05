@@ -39,4 +39,10 @@ namespace HayComm {
         fl.l_len = 0;
         return(fcntl(iFd, F_SETLK, &fl));
     }
+
+    int SetNonblocking(int iFd) {
+        int iFl = fcntl(iFd, F_GETFL);
+        return fcntl(iFd, F_SETFL, iFl|O_NONBLOCK);
+    }
+
 };

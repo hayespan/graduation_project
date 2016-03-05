@@ -1,6 +1,6 @@
 #pragma once
 
-#include "log.h"
+#include "haycomm/log.h"
 
 #define HayLog HayComm::g_Logger.log
 #define LOG_INFO HayComm::LogLevel::LOG_INFO
