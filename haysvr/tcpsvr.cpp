@@ -7,13 +7,23 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <cstdlib>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "haycomm/file.h"
 
 #include "haylog.h"
 #include "tcpsvr.h"
 
+// different exit way
+#define MONITOR_SUCC_EXIT exit(EXIT_SUCCESS);
+#define MONITOR_ERR_EXIT exit(EXIT_FAILURE);
+#define MASTER_SUCC_EXIT _exit(EXIT_SUCCESS);
+#define MASTER_ERR_EXIT _exit(EXIT_FAILURE);
+
 using std::vector;
+
 
 // TcpSvrOption
 TcpSvrOption::TcpSvrOption() {
@@ -86,21 +96,24 @@ void TcpSvr::InitSigPipe() {
     if (socketpair(PF_UNIX, SOCK_STREAM, 0, g_lPipeFd) == -1) {
         HayLog(LOG_FATAL, "haysvr init pipe fail. err[%s]",
                 strerror(errno));
-        exit(EXIT_FAILURE);
+        MONITOR_ERR_EXIT;
     }
 }
 
-int TcpSvr::AddToEpoll(int iEpFd, int iFd, int iEv) {
+int TcpSvr::AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock) {
     struct epoll_event tEv;
     tEv.data.fd = iFd;
     tEv.events = iEv;
-    if (HayComm::SetNonblocking(iFd) == -1) {
-        HayLog(LOG_ERR, "haysvr setnonblocking fail. fd[%d] err[%s]",
-                iFd, strerror(errno));
-        return -1;
+
+    if (bNonBlock) {
+        if (HayComm::SetNonblocking(iFd) == -1) {
+            HayLog(LOG_ERR, "haysvr setnonblocking fail. fd[%d] err[%s]",
+                    iFd, strerror(errno));
+            return -1;
+        }
     }
     if (epoll_ctl(iEpFd, EPOLL_CTL_ADD, iFd, &tEv) == -1) {
-        HayLog(LOG_ERR, "haysvr epoll_add fail. fd[%s] err[%s]",
+        HayLog(LOG_ERR, "haysvr epoll_add fail. fd[%d] err[%s]",
                 iFd, strerror(errno));
         return -2;
     }
@@ -111,7 +124,7 @@ int TcpSvr::DelFromEpoll(int iEpFd, int iFd) {
     return epoll_ctl(iEpFd, EPOLL_CTL_DEL, iFd, NULL);
 }
 
-int TcpSvr::ForkAndRunMaster(int iMonitorEpFd) {
+int TcpSvr::ForkAndRunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iMonitorEpFd) {
     MasterInfo oMasterInfo;
     // create pipe for monitor & master
     if (pipe(oMasterInfo.lPRPipeFd) == -1 ||
@@ -141,6 +154,8 @@ int TcpSvr::ForkAndRunMaster(int iMonitorEpFd) {
             // run master
             try {
                 RunMaster(
+                        iListenFd,
+                        pMmapLock,
                         oMasterInfo.lPWPipeFd[0], // read cmd
                         oMasterInfo.lPRPipeFd[1] 
                         );
@@ -150,7 +165,7 @@ int TcpSvr::ForkAndRunMaster(int iMonitorEpFd) {
             // master must exit itself,
             // otherwise consider it to be fail
             HayLog(LOG_ERR, "haysvr master didn't exit correctly itself. master_pid[%d]", getpid());
-            _exit(EXIT_FAILURE);
+            MASTER_ERR_EXIT;
 
         default: // monitor
             break;
@@ -199,17 +214,23 @@ void TcpSvr::Run() {
     int iMonitorEpFd = epoll_create(iFdCnt);
     if (iMonitorEpFd == -1) {
         HayLog(LOG_FATAL, "haysvr create epoll fail."); 
-        exit(EXIT_FAILURE);
+        MONITOR_ERR_EXIT;
     }
     
     // add g_lpipe[0] to epoll
     AddToEpoll(iMonitorEpFd, g_lPipeFd[0], EPOLLIN|EPOLLET);
 
+    // create listen fd
+    int iListenFd = CreateListenFd();
+
+    // create mmap lock for listen_fd
+    pthread_mutex_t * pMmapLock = CreateMmapLock();
+
     // begin fork
     int iMasterIndex = 0;
     while (iMasterIndex < m_pTcpsvrOption->iMasterCnt) {
 
-        if (ForkAndRunMaster(iMonitorEpFd) < 0) {
+        if (ForkAndRunMaster(iListenFd, pMmapLock, iMonitorEpFd) < 0) {
             HayLog(LOG_ERR, "haysvr fork fail. index[%d]", 
                     iMasterIndex);
         }
@@ -224,7 +245,7 @@ void TcpSvr::Run() {
         if (iRet < 0) { // epoll error
             HayLog(LOG_FATAL, "haysvr epoll_wait fail. err[%s]",
                     strerror(errno));
-            exit(EXIT_FAILURE);
+            MONITOR_ERR_EXIT;
         } else if (iRet == 0) { // timeout
             HayLog(LOG_INFO, "haysvr monitor heartbeat.");
         }
@@ -248,7 +269,7 @@ void TcpSvr::Run() {
                         lEvs[i].events&EPOLLHUP) {
                     // monitor sig pipe error
                     HayLog(LOG_FATAL, "haysvr sig pipe error.");
-                    exit(EXIT_FAILURE);
+                    MONITOR_ERR_EXIT;
                 }
             } else { // masters' pipe
                 if (lEvs[i].events&EPOLLIN) { // rcev msg  from masters
@@ -271,7 +292,7 @@ void TcpSvr::Run() {
                     int iNeedForkCnt = m_pTcpsvrOption->iMasterCnt - m_vMasterInfo.size();
                     int iForkRetryCnt = 3;
                     while (iNeedForkCnt > 0 && iForkRetryCnt > 0) {
-                        if (ForkAndRunMaster(iMonitorEpFd) < 0) {
+                        if (ForkAndRunMaster(iListenFd, pMmapLock, iMonitorEpFd) < 0) {
                             --iForkRetryCnt;
                             continue;
                         }
@@ -289,12 +310,131 @@ void TcpSvr::DealWithSignal(int iSig) {
     // refresh config etc
 }
 
-void TcpSvr::RunMaster(int iRdFd, int iWrFd) {
-    while (1) {
-        sleep(1); 
-        HayLog(LOG_INFO, "master pid[%d] ...", getpid());
+void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, int iWrFd) {
+
+    (void)iRdFd;
+    (void)iWrFd;
+    HayLog(LOG_INFO, "haysvr master begin...");
+
+    int iEpSize = 1024; 
+    // Since Linux 2.6.8, the size argument is unused
+    int iMasterEpFd = epoll_create(iEpSize);
+    if (iMasterEpFd == -1) {
+        HayLog(LOG_FATAL, "tcpsvr master create epoll fail. err[%s]", 
+                strerror(errno));
+        MASTER_ERR_EXIT;
     }
-    HayLog(LOG_INFO, "haysvr master exit");
-    // exit(EXIT_SUCCESS);
+
+    int ilEvLen = 128;
+    struct epoll_event lEvs[ilEvLen];
+
+    bool bHasLock = false;
+
+    while (1) {
+
+        if (!bHasLock) { // do not own lock
+            int iRet = 0;
+            if ((iRet=pthread_mutex_trylock(pMmapLock)) == 0) {
+                HayLog(LOG_INFO, "pid[%d] get lock succ.", getpid());
+                HayLog(LOG_INFO, "here pid[%d]", getpid());
+                AddToEpoll(iMasterEpFd, iListenFd, EPOLLIN, false);
+                HayLog(LOG_INFO, "here pid[%d]", getpid());
+                bHasLock = true;
+            } else {
+                if (iRet == EOWNERDEAD) {
+                    pthread_mutex_consistent_np(pMmapLock);
+                    HayLog(LOG_INFO, "pid[%d] try consist dead lock.", getpid());
+                    pthread_mutex_unlock(pMmapLock);
+                } else {
+                    bHasLock = false;
+                    DelFromEpoll(iMasterEpFd, iListenFd);
+                    HayLog(LOG_INFO, "pid[%d] get lock fail.", getpid());
+                }
+            }
+        }
+
+        int iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 5000);
+        if (iRet < 0) {
+            HayLog(LOG_FATAL, "haysvr master epoll_wait fail. ret[%d] err[%s]", iRet, strerror(errno));
+            MASTER_ERR_EXIT;
+        } else if (iRet == 0) {
+            HayLog(LOG_INFO, "haysvr master heartbeat.");
+            continue;
+        }
+        for (int i=0; i<iRet; ++i) {
+            if (lEvs[i].data.fd == iListenFd && 
+                    lEvs[i].events&EPOLLIN) {
+                struct sockaddr_in cliaddr;
+                bzero(&cliaddr, sizeof(cliaddr));
+                socklen_t clilen = sizeof(cliaddr);
+                int clifd = accept(iListenFd, (struct sockaddr *)&cliaddr, &clilen);
+                HayLog(LOG_INFO, "pid[%d] clifd[%d]", 
+                        getpid(), clifd);
+                close(clifd);
+                HayLog(LOG_INFO, "pid[%d] unlock.", getpid());
+                bHasLock = false;
+                pthread_mutex_unlock(pMmapLock);
+                sleep(1);
+            } else {
+                // pass
+            }
+        }
+    }
+
+    HayLog(LOG_INFO, "haysvr master end...");
+    MASTER_SUCC_EXIT;
+}
+
+
+int TcpSvr::CreateListenFd() {
+    int iListenFd = socket(AF_INET, SOCK_STREAM, 0);    
+    int iReuse = 1;
+    setsockopt(iListenFd, SOL_SOCKET, SO_REUSEADDR, (char *)&iReuse, sizeof(iReuse));
+    struct sockaddr_in svraddr; 
+    bzero(&svraddr, sizeof(svraddr));
+    svraddr.sin_family = AF_INET;
+    svraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    svraddr.sin_port = htons(m_pTcpsvrOption->iPort);
+
+    int iRet = 0;
+    iRet = bind(iListenFd, (struct sockaddr *)&svraddr, sizeof(svraddr));
+    if (iRet == -1) {
+        HayLog(LOG_FATAL, "tcpsvr bind socket fail. port[%d] err[%s]", m_pTcpsvrOption->iPort, strerror(errno));
+        MONITOR_ERR_EXIT;
+    }
+
+    iRet = listen(iListenFd, SOMAXCONN); // max queue size 
+    if (iRet == -1) {
+        HayLog(LOG_FATAL, "tcpsvr listen socket fail. err[%s]", strerror(errno));
+        MONITOR_ERR_EXIT;
+    }
+
+    iRet = HayComm::SetNonblocking(iListenFd);
+    if (iRet < 0) {
+        HayLog(LOG_FATAL, "tcpsvr listen socket setnonblock fail.");
+        MONITOR_ERR_EXIT;
+    }
+
+    
+    return iListenFd;
+}
+
+pthread_mutex_t * TcpSvr::CreateMmapLock() {
+    pthread_mutex_t * mtx = NULL;
+    mtx = (pthread_mutex_t*)mmap(NULL, sizeof(pthread_mutex_t), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANON, -1, 0);
+    if (mtx == MAP_FAILED) {
+        HayLog(LOG_FATAL, "tcpsvr create mmap fail. err[%s]",
+                strerror(errno));
+        MONITOR_ERR_EXIT;
+    }
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+    //pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT); 
+    pthread_mutexattr_setrobust_np(&attr,PTHREAD_MUTEX_ROBUST_NP); 
+    pthread_mutex_init(mtx, &attr);
+    pthread_mutexattr_destroy(&attr);
+    return mtx;
 }
 

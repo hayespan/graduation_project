@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <signal.h>
+#include <pthread.h>
 
 #include "haysvrdispatcher.h"
 
@@ -29,7 +30,7 @@ public:
     void SetSvrOption(const TcpSvrOption * pTcpSvrOption);
     void SetDispatcher(const HaysvrDispatcher * pDispatcher);
     void Run();
-    void RunMaster(int iRdFd, int iWrFd);
+    void RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, int iWrFd);
 
 private:
     TcpSvr(const TcpSvr &);
@@ -38,11 +39,13 @@ private:
     void InitSigPipe();
     void InitSignalHandler(); // catch signal
     static int AddSigHandler(int iSig, sighandler_t pfSigHandler);
-    static int AddToEpoll(int iEpFd, int iFd, int iEv);
+    static int AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock=true);
     static int DelFromEpoll(int iEpFd, int iFd);
     void DealWithSignal(int iSig);
-    int ForkAndRunMaster(int iMonitorEpFd);
+    int ForkAndRunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iMonitorEpFd);
     int RecycleMaster(int iMonitorEpFd, int iPRFd);
+    int CreateListenFd();
+    pthread_mutex_t * CreateMmapLock();
 
 private:
     const TcpSvrOption * m_pTcpsvrOption;
