@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <list>
 
 #include "haycomm/file.h"
 
@@ -23,6 +24,7 @@
 #define MASTER_ERR_EXIT _exit(EXIT_FAILURE);
 
 using std::vector;
+using std::list;
 
 
 // TcpSvrOption
@@ -32,6 +34,7 @@ TcpSvrOption::TcpSvrOption() {
     int iCpuCnt = sysconf(_SC_NPROCESSORS_ONLN); 
     iMasterCnt = iCpuCnt;
     iWorkerCnt = iCpuCnt * 2;
+    iMaxConnCntPerPro = 1000;
 }
 
 TcpSvrOption::~TcpSvrOption() {
@@ -48,6 +51,7 @@ MasterInfo::MasterInfo() {
 // TcpSvr
 TcpSvr::TcpSvr() {
     m_bRun = false;
+    m_iCurConnCnt = 0;
     m_pTcpsvrOption = NULL;
     m_pDispatcher = NULL;
 }
@@ -329,16 +333,16 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
     struct epoll_event lEvs[ilEvLen];
 
     bool bHasLock = false;
+    bool bAcceptPrio = false;
 
     while (1) {
 
-        if (!bHasLock) { // do not own lock
+        if (!bHasLock && (m_iCurConnCnt < (int)(m_pTcpsvrOption->iMaxConnCntPerPro*7/8.))) { // do not own lock
             int iRet = 0;
             if ((iRet=pthread_mutex_trylock(pMmapLock)) == 0) {
                 HayLog(LOG_INFO, "pid[%d] get lock succ.", getpid());
-                HayLog(LOG_INFO, "here pid[%d]", getpid());
                 AddToEpoll(iMasterEpFd, iListenFd, EPOLLIN, false);
-                HayLog(LOG_INFO, "here pid[%d]", getpid());
+                bAcceptPrio = true;
                 bHasLock = true;
             } else {
                 if (iRet == EOWNERDEAD) {
@@ -346,39 +350,67 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
                     HayLog(LOG_INFO, "pid[%d] try consist dead lock.", getpid());
                     pthread_mutex_unlock(pMmapLock);
                 } else {
+                    bAcceptPrio = false;
                     bHasLock = false;
                     DelFromEpoll(iMasterEpFd, iListenFd);
-                    HayLog(LOG_INFO, "pid[%d] get lock fail.", getpid());
+                    // HayLog(LOG_INFO, "pid[%d] get lock fail.", getpid());
                 }
             }
         }
 
-        int iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 5000);
+        int iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 500);
         if (iRet < 0) {
             HayLog(LOG_FATAL, "haysvr master epoll_wait fail. ret[%d] err[%s]", iRet, strerror(errno));
             MASTER_ERR_EXIT;
         } else if (iRet == 0) {
-            HayLog(LOG_INFO, "haysvr master heartbeat.");
             continue;
         }
-        for (int i=0; i<iRet; ++i) {
-            if (lEvs[i].data.fd == iListenFd && 
-                    lEvs[i].events&EPOLLIN) {
+
+        // fd wait accept
+        list<struct epoll_event> lWaitAccept;
+        list<struct epoll_event> lOtherEv;
+
+        int iEvCnt = iRet;
+        for (int i=0; i<iEvCnt; ++i) {
+            if (lEvs[i].data.fd == iListenFd) {
+                if (lEvs[i].events&EPOLLIN) {
+                    lWaitAccept.push_back(lEvs[i]);
+                } else { // error occurs 
+                    HayLog(LOG_FATAL, "haysvr master find listen fd error. event[%d]",
+                            lEvs[i].events);
+                }
+            } else { // other ev
+                lOtherEv.push_back(lEvs[i]);
+            }
+        }
+
+        if (bAcceptPrio) { // first deal with accept and unlock
+            for (list<struct epoll_event>::iterator iter=lWaitAccept.begin(); iter!=lWaitAccept.end(); ++iter) {
                 struct sockaddr_in cliaddr;
                 bzero(&cliaddr, sizeof(cliaddr));
                 socklen_t clilen = sizeof(cliaddr);
-                int clifd = accept(iListenFd, (struct sockaddr *)&cliaddr, &clilen);
-                HayLog(LOG_INFO, "pid[%d] clifd[%d]", 
-                        getpid(), clifd);
-                close(clifd);
-                HayLog(LOG_INFO, "pid[%d] unlock.", getpid());
-                bHasLock = false;
-                pthread_mutex_unlock(pMmapLock);
-                sleep(1);
-            } else {
-                // pass
+                int iCliFd = accept(iter->data.fd, (struct sockaddr *)&cliaddr, &clilen);
+                if (iCliFd == -1) {
+                    // maybe fd exhausted 
+                    continue;
+                } else {
+                    m_iCurConnCnt++;
+                }
+                HayLog(LOG_INFO, "pid[%d] clifd[%d] err[%s]", 
+                        getpid(), iCliFd, strerror(errno));
+                // close(iCliFd);
             }
+            // unlock
+            HayLog(LOG_INFO, "haysvr master accept cnt[%d], unlock.", lWaitAccept.size());
+            bHasLock = false;
+            pthread_mutex_unlock(pMmapLock);
         }
+
+        // deal with other events
+        for (list<struct epoll_event>::iterator iter=lOtherEv.begin(); iter!=lOtherEv.end(); ++iter) {
+            
+        } 
+
     }
 
     HayLog(LOG_INFO, "haysvr master end...");
@@ -431,7 +463,7 @@ pthread_mutex_t * TcpSvr::CreateMmapLock() {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-    //pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT); 
+    pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT); 
     pthread_mutexattr_setrobust_np(&attr,PTHREAD_MUTEX_ROBUST_NP); 
     pthread_mutex_init(mtx, &attr);
     pthread_mutexattr_destroy(&attr);

@@ -78,7 +78,13 @@ void Haysvr::ReadOptionFromConfig(TcpSvrOption & oTcpSvrOption, HayComm::Config 
     }
     if (oConfig.GetValue("server", "mastercnt", sBuf) == 0) {
         oTcpSvrOption.iMasterCnt = HayComm::StrToInt(sBuf);
-    }    if (oConfig.GetValue("server", "workercnt", sBuf) == 0) {        oTcpSvrOption.iWorkerCnt = HayComm::StrToInt(sBuf);    }
+    }    
+    if (oConfig.GetValue("server", "workercnt", sBuf) == 0) {       
+        oTcpSvrOption.iWorkerCnt = HayComm::StrToInt(sBuf);   
+    }
+    if (oConfig.GetValue("server", "max_conn_cnt_per_process", sBuf) == 0) {       
+        oTcpSvrOption.iMaxConnCntPerPro = HayComm::StrToInt(sBuf);   
+    }
 }
 
 void Haysvr::SetDispatcher(const HaysvrDispatcher * pDispatcher) {

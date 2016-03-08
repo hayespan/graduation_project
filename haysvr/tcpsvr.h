@@ -6,7 +6,7 @@
 
 #include "haysvrdispatcher.h"
 
-class TcpSvrOption {
+class TcpSvrOption { // option stored in haysvr
 public:
     TcpSvrOption();
     virtual ~TcpSvrOption();
@@ -14,9 +14,10 @@ public:
     int iPort;
     int iMasterCnt;
     int iWorkerCnt;
+    int iMaxConnCntPerPro;
 };
 
-struct MasterInfo {
+struct MasterInfo { // monitor used
     int iPid;
     int lPRPipeFd[2]; // parent read
     int lPWPipeFd[2]; // parent write
@@ -52,6 +53,7 @@ private:
     const HaysvrDispatcher * m_pDispatcher;
 
     bool m_bRun;
+    int m_iCurConnCnt;
     std::vector<MasterInfo> m_vMasterInfo;
 };
 
