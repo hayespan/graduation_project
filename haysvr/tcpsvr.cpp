@@ -364,8 +364,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
 
         if (!bHasLock) {
             if (m_iCurConnCnt > (int)(m_pTcpsvrOption->iMaxConnCntPerPro*7/8.)) { // too busy
-                // give up listen fd, pay more attention to other io
-                DelFromEpoll(iMasterEpFd, iListenFd);
+                // do not trylock
             } else { // not busy
                 int iRet = 0;
                 if ((iRet=pthread_mutex_trylock(pMmapLock)) == 0) {
@@ -386,6 +385,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
             }
         }
 
+        HayLog(LOG_DBG, "xxx1");
         int iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 500);
         if (iRet < 0) {
             HayLog(LOG_FATAL, "haysvr master epoll_wait fail. ret[%d] err[%s]", iRet, strerror(errno));
@@ -394,6 +394,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
             continue;
         }
 
+        HayLog(LOG_DBG, "xxx2");
         // fd wait accept
         list<struct epoll_event> lWaitAccept;
         list<struct epoll_event> lOtherEv;
@@ -414,6 +415,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
             }
         }
 
+        HayLog(LOG_DBG, "xxx3");
         if (bHasLock) { // first deal with accept and unlock
             HayLog(LOG_INFO, "haysvr master get listen ev_cnt[%d]", lWaitAccept.size());
             for (list<struct epoll_event>::iterator iter=lWaitAccept.begin(); iter!=lWaitAccept.end(); ++iter) {
@@ -515,9 +517,9 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
                     pData->sData.resize(iTotSize);
 
                     DelFromEpoll(iMasterEpFd, iCliFd);
-                    int iFileFd = open("/home/panhzh3/svrdata.hayes", O_CREAT|O_RDWR);
-                    write(iFileFd, pData->sData.data(), pData->sData.size());
-                    close(iFileFd);
+                    // int iFileFd = open("/home/panhzh3/svrdata.hayes", O_CREAT|O_RDWR);
+                    // write(iFileFd, pData->sData.data(), pData->sData.size());
+                    // close(iFileFd);
 
                     HayLog(LOG_DBG, "pushing to queue. fd[%d]", iCliFd);
                     m_oQueue.push(pData);
@@ -562,6 +564,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
                         }
                     } else { // write finish
                         HayLog(LOG_DBG, "haysvr master write fd[%d] write-cnt[%d]", iCliFd, pData->iCurWriteLen);
+                        HayLog(LOG_ERR, "normal recycle fd[%d]", iCliFd);
                         goto RECYCLE_CLIFD;
                     }
                 } 
@@ -575,7 +578,9 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
             continue;
 
 RECYCLE_CLIFD:
+            HayLog(LOG_ERR, "all recycle fd[%d]", iCliFd);
             // client close fd
+            m_iCurConnCnt--;
             close(iCliFd);
             DelFromEpoll(iMasterEpFd, iCliFd);
             delete pData;
@@ -689,9 +694,9 @@ void RunWorker(int iMasterEpFd, MyQueue<struct ConnData * > * pQueue, HaysvrDisp
     pData->sData.append(outbuf.m_sBuf);
     pData->iCurWriteLen = 0;
 
-    int iFileFd = open("/home/panhzh3/svrodata.hayes", O_CREAT|O_RDWR);
-    write(iFileFd, pData->sData.data(), pData->sData.size());
-    close(iFileFd);
+    // int iFileFd = open("/home/panhzh3/svrodata.hayes", O_CREAT|O_RDWR);
+    // write(iFileFd, pData->sData.data(), pData->sData.size());
+    // close(iFileFd);
 
     AddToEpoll(iMasterEpFd, iCliFd, EPOLLET|EPOLLOUT, false);
 

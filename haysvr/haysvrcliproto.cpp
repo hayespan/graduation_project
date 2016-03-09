@@ -72,9 +72,9 @@ int HaysvrCliProto::DoProtoCall(int iCmd, const HayBuf & inbuf, HayBuf & outbuf)
     string sData(lsMetaBuf, iMetaLen);
     sData.append(inbuf.m_sBuf);
     sData.append(outbuf.m_sBuf);
-    int iFileFd = open("/home/panhzh3/clidata.hayes", O_CREAT|O_RDWR);
-    write(iFileFd, sData.data(), sData.size());
-    close(iFileFd);
+    // int iFileFd = open("/home/panhzh3/clidata.hayes", O_CREAT|O_RDWR);
+    // write(iFileFd, sData.data(), sData.size());
+    // close(iFileFd);
 
     // write to svr
     
@@ -123,15 +123,16 @@ int HaysvrCliProto::DoProtoCall(int iCmd, const HayBuf & inbuf, HayBuf & outbuf)
         return tMetaData.iSvrErrno;
     }
 
-    iFileFd = open("/home/panhzh3/cliodata.hayes", O_CREAT|O_RDWR);
-    write(iFileFd, sData.data(), sData.size());
-    close(iFileFd);
+    // iFileFd = open("/home/panhzh3/cliodata.hayes", O_CREAT|O_RDWR);
+    // write(iFileFd, sData.data(), sData.size());
+    // close(iFileFd);
 
     m_iResponseCode = tMetaData.iRespCode;
 
     outbuf.m_sBuf = string(sData.data()+iMetaLen+tMetaData.iReqtLen, tMetaData.iRespLen);
 
-    HayLog(LOG_ERR, "hayespan #6");
+    HayLog(LOG_DBG, "hayespan #6");
+    close(iConnFd);
     return HaysvrErrno::Ok; 
 }
 
