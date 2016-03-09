@@ -10,21 +10,61 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <ctime>
 #include <list>
 
 #include "haycomm/file.h"
+#include "haycomm/time_util.h"
 
 #include "haylog.h"
 #include "tcpsvr.h"
+#include "metadata.h"
 
 // different exit way
 #define MONITOR_SUCC_EXIT exit(EXIT_SUCCESS);
 #define MONITOR_ERR_EXIT exit(EXIT_FAILURE);
 #define MASTER_SUCC_EXIT _exit(EXIT_SUCCESS);
 #define MASTER_ERR_EXIT _exit(EXIT_FAILURE);
+#define BUFFER_SIZE 512
 
 using std::vector;
 using std::list;
+
+// static func
+int AddSigHandler(int iSig, sighandler_t pfSigHandler) {
+    struct sigaction sa;
+    memset(&sa, '\0', sizeof(sa));
+    sa.sa_handler = pfSigHandler;
+    sa.sa_flags |= SA_RESTART;
+    sigfillset(&sa.sa_mask);
+    return sigaction(iSig, &sa, NULL);
+}
+
+int AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock) {
+    struct epoll_event tEv;
+    tEv.data.fd = iFd;
+    tEv.events = iEv;
+
+    if (bNonBlock) {
+        if (HayComm::SetNonblocking(iFd) == -1) {
+            // HayLog(LOG_ERR, "haysvr setnonblocking fail. fd[%d] err[%s]",
+                    // iFd, strerror(errno));
+            return -1;
+        }
+    }
+    if (epoll_ctl(iEpFd, EPOLL_CTL_ADD, iFd, &tEv) == -1) {
+        // HayLog(LOG_ERR, "haysvr epoll_add fail. fd[%d] err[%s]",
+                // iFd, strerror(errno));
+        return -2;
+    }
+    return 0;
+} 
+
+int DelFromEpoll(int iEpFd, int iFd) {
+    return epoll_ctl(iEpFd, EPOLL_CTL_DEL, iFd, NULL);
+}
 
 
 // TcpSvrOption
@@ -48,6 +88,17 @@ MasterInfo::MasterInfo() {
     lPWPipeFd[0] = lPWPipeFd[1] = -1;
 }
 
+// ConnData
+ConnData::ConnData() {
+    iCurReadLen = 0;
+    iCurWriteLen = 0;
+    
+    // io fd
+    iFd = -1; 
+    iLastTime = HayComm::GetNowTimestamp(); // last read/write time
+    bzero(&tSockAddr, sizeof(tSockAddr));
+}
+
 // TcpSvr
 TcpSvr::TcpSvr() {
     m_bRun = false;
@@ -64,7 +115,7 @@ void TcpSvr::SetSvrOption(const TcpSvrOption * pTcpSvrOption) {
     m_pTcpsvrOption = pTcpSvrOption;    
 }
 
-void TcpSvr::SetDispatcher(const HaysvrDispatcher * pDispatcher) {
+void TcpSvr::SetDispatcher(HaysvrDispatcher * pDispatcher) {
     m_pDispatcher = pDispatcher;
 }
 
@@ -77,15 +128,6 @@ static void SigHandler(int iSig) {
     int iErrno = errno;
     send(g_lPipeFd[1], (char *)&iSig, 1, 0);
     errno = iErrno;
-}
-
-int TcpSvr::AddSigHandler(int iSig, sighandler_t pfSigHandler) {
-    struct sigaction sa;
-    memset(&sa, '\0', sizeof(sa));
-    sa.sa_handler = pfSigHandler;
-    sa.sa_flags |= SA_RESTART;
-    sigfillset(&sa.sa_mask);
-    return sigaction(iSig, &sa, NULL);
 }
 
 void TcpSvr::InitSignalHandler() {
@@ -102,30 +144,6 @@ void TcpSvr::InitSigPipe() {
                 strerror(errno));
         MONITOR_ERR_EXIT;
     }
-}
-
-int TcpSvr::AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock) {
-    struct epoll_event tEv;
-    tEv.data.fd = iFd;
-    tEv.events = iEv;
-
-    if (bNonBlock) {
-        if (HayComm::SetNonblocking(iFd) == -1) {
-            HayLog(LOG_ERR, "haysvr setnonblocking fail. fd[%d] err[%s]",
-                    iFd, strerror(errno));
-            return -1;
-        }
-    }
-    if (epoll_ctl(iEpFd, EPOLL_CTL_ADD, iFd, &tEv) == -1) {
-        HayLog(LOG_ERR, "haysvr epoll_add fail. fd[%d] err[%s]",
-                iFd, strerror(errno));
-        return -2;
-    }
-    return 0;
-} 
-
-int TcpSvr::DelFromEpoll(int iEpFd, int iFd) {
-    return epoll_ctl(iEpFd, EPOLL_CTL_DEL, iFd, NULL);
 }
 
 int TcpSvr::ForkAndRunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iMonitorEpFd) {
@@ -332,28 +350,38 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
     int ilEvLen = 128;
     struct epoll_event lEvs[ilEvLen];
 
+    // start thread pool
+    HayThreadPool oThreadPool;
+    oThreadPool.SetThreadNum(m_pTcpsvrOption->iWorkerCnt);
+    oThreadPool.SetMasterEpollFd(iMasterEpFd);
+    oThreadPool.SetQueue(&m_oQueue);
+    oThreadPool.SetDispatcher(m_pDispatcher);
+    oThreadPool.Start();
+
     bool bHasLock = false;
-    bool bAcceptPrio = false;
 
     while (1) {
 
-        if (!bHasLock && (m_iCurConnCnt < (int)(m_pTcpsvrOption->iMaxConnCntPerPro*7/8.))) { // do not own lock
-            int iRet = 0;
-            if ((iRet=pthread_mutex_trylock(pMmapLock)) == 0) {
-                HayLog(LOG_INFO, "pid[%d] get lock succ.", getpid());
-                AddToEpoll(iMasterEpFd, iListenFd, EPOLLIN, false);
-                bAcceptPrio = true;
-                bHasLock = true;
-            } else {
-                if (iRet == EOWNERDEAD) {
-                    pthread_mutex_consistent_np(pMmapLock);
-                    HayLog(LOG_INFO, "pid[%d] try consist dead lock.", getpid());
-                    pthread_mutex_unlock(pMmapLock);
+        if (!bHasLock) {
+            if (m_iCurConnCnt > (int)(m_pTcpsvrOption->iMaxConnCntPerPro*7/8.)) { // too busy
+                // give up listen fd, pay more attention to other io
+                DelFromEpoll(iMasterEpFd, iListenFd);
+            } else { // not busy
+                int iRet = 0;
+                if ((iRet=pthread_mutex_trylock(pMmapLock)) == 0) {
+                    HayLog(LOG_INFO, "pid[%d] get lock succ.", getpid());
+                    AddToEpoll(iMasterEpFd, iListenFd, EPOLLIN|EPOLLET, false);
+                    bHasLock = true;
                 } else {
-                    bAcceptPrio = false;
-                    bHasLock = false;
-                    DelFromEpoll(iMasterEpFd, iListenFd);
-                    // HayLog(LOG_INFO, "pid[%d] get lock fail.", getpid());
+                    if (iRet == EOWNERDEAD) {
+                        pthread_mutex_consistent_np(pMmapLock);
+                        HayLog(LOG_INFO, "pid[%d] try consist dead lock.", getpid());
+                        pthread_mutex_unlock(pMmapLock);
+                    } else {
+                        bHasLock = false;
+                        DelFromEpoll(iMasterEpFd, iListenFd);
+                        // HayLog(LOG_INFO, "pid[%d] get lock fail.", getpid());
+                    }
                 }
             }
         }
@@ -372,45 +400,189 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
 
         int iEvCnt = iRet;
         for (int i=0; i<iEvCnt; ++i) {
-            if (lEvs[i].data.fd == iListenFd) {
-                if (lEvs[i].events&EPOLLIN) {
-                    lWaitAccept.push_back(lEvs[i]);
-                } else { // error occurs 
-                    HayLog(LOG_FATAL, "haysvr master find listen fd error. event[%d]",
-                            lEvs[i].events);
+            if ((lEvs[i].data.fd == iListenFd)) {
+                if (bHasLock) {
+                    if (lEvs[i].events&EPOLLIN) {
+                        lWaitAccept.push_back(lEvs[i]);
+                    } else { // error occurs 
+                        HayLog(LOG_FATAL, "haysvr master find listen fd error. event[%d]",
+                                lEvs[i].events);
+                    }
                 }
             } else { // other ev
                 lOtherEv.push_back(lEvs[i]);
             }
         }
 
-        if (bAcceptPrio) { // first deal with accept and unlock
+        if (bHasLock) { // first deal with accept and unlock
+            HayLog(LOG_INFO, "haysvr master get listen ev_cnt[%d]", lWaitAccept.size());
             for (list<struct epoll_event>::iterator iter=lWaitAccept.begin(); iter!=lWaitAccept.end(); ++iter) {
-                struct sockaddr_in cliaddr;
-                bzero(&cliaddr, sizeof(cliaddr));
-                socklen_t clilen = sizeof(cliaddr);
-                int iCliFd = accept(iter->data.fd, (struct sockaddr *)&cliaddr, &clilen);
-                if (iCliFd == -1) {
-                    // maybe fd exhausted 
-                    continue;
-                } else {
+                while (1) {
+                    struct sockaddr_in cliaddr;
+                    bzero(&cliaddr, sizeof(cliaddr));
+                    socklen_t clilen = sizeof(cliaddr);
+                    int iCliFd = accept(iter->data.fd, (struct sockaddr *)&cliaddr, &clilen);
+                    if (iCliFd == -1) {
+                        // maybe fd exhausted 
+                        // HayLog(LOG_DBG, "haysvr master listen fd exhausted. err[%s] conn_cnt[%d]", 
+                                // strerror(errno), m_iCurConnCnt);
+                        break;
+                    }
+                    
                     m_iCurConnCnt++;
+
+                    // store in map
+                    struct ConnData * pData = new ConnData();
+                    pData->iLastTime = HayComm::GetNowTimestamp();
+                    pData->iFd = iCliFd;
+                    pData->tSockAddr = cliaddr; 
+                    m_mapConn[iCliFd] = pData;
+                    // set nonblocking and add to epoll
+                    HayComm::SetNonblocking(iCliFd);
+                    // set reuse attr
+                    int iReuse = 1;
+                    setsockopt(iCliFd, SOL_SOCKET, SO_REUSEADDR, (char *)&iReuse, sizeof(iReuse));
+                    AddToEpoll(iMasterEpFd, iCliFd, EPOLLIN|EPOLLRDHUP|EPOLLET, false);
+
+                    HayLog(LOG_INFO, "add clifd[%d] to epoll.", 
+                            iCliFd);
                 }
-                HayLog(LOG_INFO, "pid[%d] clifd[%d] err[%s]", 
-                        getpid(), iCliFd, strerror(errno));
-                // close(iCliFd);
             }
+
             // unlock
             HayLog(LOG_INFO, "haysvr master accept cnt[%d], unlock.", lWaitAccept.size());
             bHasLock = false;
             pthread_mutex_unlock(pMmapLock);
         }
 
+        HayLog(LOG_INFO, "haysvr master get other event cnt[%d]", lOtherEv.size());
         // deal with other events
         for (list<struct epoll_event>::iterator iter=lOtherEv.begin(); iter!=lOtherEv.end(); ++iter) {
-            
-        } 
 
+            char lsBuf[BUFFER_SIZE];
+
+            // find conndata in map
+            int iCliFd = iter->data.fd;
+            ConnMap::iterator iterConn = m_mapConn.find(iCliFd);
+            ConnData * pData = NULL;
+            if (iterConn == m_mapConn.end()) {
+                goto RECYCLE_CLIFD;
+            }
+            pData = iterConn->second;
+
+            // read 
+            if (iter->events&EPOLLIN) {
+                HayLog(LOG_DBG, "haysvr master epollin. fd[%d]", iter->data.fd);
+
+                while (1) {
+                    int iRcnt = recv(iCliFd, lsBuf, BUFFER_SIZE, 0); 
+                    if (iRcnt == -1) {
+                        if (errno == EAGAIN) {
+                            break;
+                        } else {
+                            HayLog(LOG_ERR, "haysvr master read conn fail. fd[%d] err[%s]", 
+                                    iCliFd, strerror(errno));
+                            goto RECYCLE_CLIFD;
+                        }
+                    } else if (iRcnt == 0) {
+                        // peer close
+                        goto RECYCLE_CLIFD;
+                    } else {
+                        string sTrunk(lsBuf, iRcnt);
+                        pData->sData.append(sTrunk);
+                        pData->iCurReadLen += iRcnt;
+                        pData->iLastTime = HayComm::GetNowTimestamp();
+                    }
+                }
+
+                // begin parse 
+                // 1. metadata
+                if (pData->tMetaData.iCmd == -1) {
+                    if (pData->iCurReadLen >= (int)sizeof(MetaData)) {
+                        memcpy(&(pData->tMetaData), pData->sData.data(), sizeof(MetaData));
+                    } else {
+                        continue;
+                    }
+                } 
+
+                HayLog(LOG_DBG, "cmd[%d] reqtlen[%d] resplen[%d] sdata[%d]",
+                        pData->tMetaData.iCmd, pData->tMetaData.iReqtLen, pData->tMetaData.iRespLen, 
+                        pData->sData.size());
+                // parse data len
+                size_t iTotSize = pData->tMetaData.iReqtLen + pData->tMetaData.iRespLen + sizeof(MetaData);
+                if (iTotSize <= pData->sData.size()) {
+                    // recv complete
+                    pData->sData.resize(iTotSize);
+
+                    DelFromEpoll(iMasterEpFd, iCliFd);
+                    int iFileFd = open("/home/panhzh3/svrdata.hayes", O_CREAT|O_RDWR);
+                    write(iFileFd, pData->sData.data(), pData->sData.size());
+                    close(iFileFd);
+
+                    HayLog(LOG_DBG, "pushing to queue. fd[%d]", iCliFd);
+                    m_oQueue.push(pData);
+                    HayLog(LOG_DBG, "push to queue ok. fd[%d]", iCliFd);
+
+                } else {
+                    HayLog(LOG_DBG, "continue recv data. fd[%d]", iCliFd);
+                    continue;
+                }
+
+            // svr peer error
+            } else if (iter->events&EPOLLERR || 
+                    iter->events&EPOLLHUP ||
+                    iter->events&EPOLLRDHUP) {
+                HayLog(LOG_DBG, "haysvr master epollerr|epollup|epollrdhup. fd[%d]", iter->data.fd);
+                goto RECYCLE_CLIFD;
+
+            // write
+            } else if (iter->events&EPOLLOUT) {
+
+                HayLog(LOG_DBG, "haysvr master epollout. fd[%d] sdatalen[%d]", iter->data.fd, pData->sData.size());
+                int iTotSize = sizeof(struct MetaData) + pData->tMetaData.iRespLen + pData->tMetaData.iReqtLen;
+                while (1) {
+                    if (pData->iCurWriteLen < iTotSize) {
+                        int iLPos = pData->iCurWriteLen;
+                        int iToWriteSize = iTotSize-iLPos; 
+                        if (iToWriteSize > BUFFER_SIZE) {
+                            iToWriteSize = BUFFER_SIZE;
+                        }
+                        int iWcnt = send(iCliFd, pData->sData.data()+iLPos, iToWriteSize, 0);
+                        if (iWcnt == -1) {
+                            if (errno == EAGAIN) {
+                                break;
+                            } else {
+                                HayLog(LOG_ERR, "haysvr master write err. fd[%d] [%s]", 
+                                        iCliFd, strerror(errno));
+                            }
+
+                        } else {
+                            pData->iCurWriteLen += iWcnt;
+                            pData->iLastTime = HayComm::GetNowTimestamp();
+                        }
+                    } else { // write finish
+                        HayLog(LOG_DBG, "haysvr master write fd[%d] write-cnt[%d]", iCliFd, pData->iCurWriteLen);
+                        goto RECYCLE_CLIFD;
+                    }
+                } 
+
+            } else {
+                HayLog(LOG_INFO, "haysvr master fetch other event. events[%d]", 
+                        iter->events);
+                // pass
+            }
+
+            continue;
+
+RECYCLE_CLIFD:
+            // client close fd
+            close(iCliFd);
+            DelFromEpoll(iMasterEpFd, iCliFd);
+            delete pData;
+            if (iterConn != m_mapConn.end()) {
+                m_mapConn.erase(iterConn);
+            }
+        } 
     }
 
     HayLog(LOG_INFO, "haysvr master end...");
@@ -468,5 +640,138 @@ pthread_mutex_t * TcpSvr::CreateMmapLock() {
     pthread_mutex_init(mtx, &attr);
     pthread_mutexattr_destroy(&attr);
     return mtx;
+}
+
+
+void RunWorker(int iMasterEpFd, MyQueue<struct ConnData * > * pQueue, HaysvrDispatcher * pDispatcher) {
+
+    // get conndata from queue
+    struct ConnData * pData;
+    pQueue->pop(pData); // block until get data
+    HayLog(LOG_INFO, "haysvr worker get task. fd[%d]", pData->iFd);
+    
+    int iCliFd = pData->iFd;
+    size_t iMetaDataLen = sizeof(struct MetaData);
+    pData->iLastTime = HayComm::GetNowTimestamp(); 
+
+    HayBuf inbuf, outbuf;
+    HayLog(LOG_DBG, "hayespan sdatalen[%d], metalen[%d], reqtlen[%d], resplen[%d]",
+            pData->sData.size(), iMetaDataLen, pData->tMetaData.iReqtLen, pData->tMetaData.iRespLen);
+    inbuf.CopyFrom(pData->sData, iMetaDataLen, pData->tMetaData.iReqtLen);
+    outbuf.CopyFrom(pData->sData, iMetaDataLen+pData->tMetaData.iReqtLen, pData->tMetaData.iRespLen);
+    HayLog(LOG_DBG, "hayespan inbuf-size[%d] outbuf-size[%d] [%c%c%c]",
+            inbuf.m_sBuf.size(), outbuf.m_sBuf.size(), outbuf.m_sBuf[0], outbuf.m_sBuf[1], outbuf.m_sBuf[2]);
+
+    int iRespCode = 0;
+    int iSvrErrno = pDispatcher->DoDispatch(
+            pData->tMetaData.iCmd,
+            inbuf,
+            outbuf,
+            iRespCode
+            );
+
+    if (iSvrErrno < 0) {
+        HayLog(LOG_ERR, "haysvr worker DoDispatch ret fail. ret[%d]", 
+                iSvrErrno);
+    }
+    pData->tMetaData.iSvrErrno = iSvrErrno;
+    pData->tMetaData.iRespCode = iRespCode;
+    pData->tMetaData.iReqtLen = inbuf.m_sBuf.size();
+    pData->tMetaData.iRespLen = outbuf.m_sBuf.size();
+
+    // construct sData
+    pData->sData = ""; // release old val
+    char lsBuf[iMetaDataLen];
+    memcpy(lsBuf, (char *)&(pData->tMetaData), iMetaDataLen);
+    string sMetaData(lsBuf, iMetaDataLen);
+    pData->sData.append(sMetaData);
+    pData->sData.append(inbuf.m_sBuf);
+    pData->sData.append(outbuf.m_sBuf);
+    pData->iCurWriteLen = 0;
+
+    int iFileFd = open("/home/panhzh3/svrodata.hayes", O_CREAT|O_RDWR);
+    write(iFileFd, pData->sData.data(), pData->sData.size());
+    close(iFileFd);
+
+    AddToEpoll(iMasterEpFd, iCliFd, EPOLLET|EPOLLOUT, false);
+
+    HayLog(LOG_INFO, "haysvr worker end processing fd. cmd[%d] fd[%d]",
+            pData->tMetaData.iCmd, iCliFd);
+}
+
+// worker logic
+void * pThreadFunc(void * pData) {
+    HayThreadPool::HayThreadPoolData * pThreadData = (HayThreadPool::HayThreadPoolData *)pData;
+    int iMasterEpFd = pThreadData->iMasterEpFd;
+    MyQueue<struct ConnData * > * pQueue = pThreadData->pQueue;
+    HaysvrDispatcher * pDispatcher = pThreadData->pDispatcher;
+
+    while (1) {
+        try {
+            RunWorker(iMasterEpFd, pQueue, pDispatcher);
+        } catch (exception & e) {
+            HayLog(LOG_ERR, "haysvr worker catch exception. exp[%s]",
+                    e.what());
+        }
+    }
+
+    return NULL;
+}
+
+// HayThreadPool
+HayThreadPool::HayThreadPool() {
+    m_iThreadNum = 0;
+    m_iMasterEpFd = -1;
+    m_pQueue = NULL;
+    m_pDispatcher = NULL;
+}
+
+HayThreadPool::~HayThreadPool() {
+}
+
+void HayThreadPool::SetThreadNum(int iThreadNum) {
+    m_iThreadNum = iThreadNum;    
+}
+
+void HayThreadPool::SetMasterEpollFd(int iMasterEpFd) {
+    m_iMasterEpFd = iMasterEpFd;
+}
+
+void HayThreadPool::SetQueue(MyQueue<struct ConnData * > * pQueue) {
+    m_pQueue = pQueue;    
+}
+
+void HayThreadPool::SetDispatcher(HaysvrDispatcher * pDispatcher) {
+    m_pDispatcher = pDispatcher;    
+}
+
+void HayThreadPool::Start() {
+    int iRet = 0;
+
+    // thread data
+    HayThreadPoolData tThreadData;
+    tThreadData.iMasterEpFd = m_iMasterEpFd;
+    tThreadData.pQueue = m_pQueue;
+    tThreadData.pDispatcher = m_pDispatcher;
+
+    for (int i=0; i<m_iThreadNum; ++i) {
+        pthread_t iPtId = 0;
+        iRet = pthread_create(&iPtId, NULL, pThreadFunc, &tThreadData);
+        if (iRet != 0) {
+            HayLog(LOG_ERR, "haysvr threadpool create thread fail. ret[%d]", iRet);
+            --i;
+            continue;
+        }
+
+        iRet = pthread_detach(iPtId);
+        if (iRet != 0) {
+            HayLog(LOG_ERR, "haysvr threadpool detach thread fail. ret[%d]", iRet);
+        }
+
+        m_vThreadId.push_back(iPtId);
+    }    
+
+    HayLog(LOG_INFO, "haysvr threadpool create threads succ. thread_cnt[%d]", 
+            m_vThreadId.size());
 }
 

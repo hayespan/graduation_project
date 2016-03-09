@@ -6,11 +6,15 @@ struct HaysvrErrno {
         Ok = 0, 
         InitConfigFail = -9001,
         NoProtoOption = -9002,
-        SerilizeInbuf = -9003,
-        SerilizeOutbuf = -9004,
-        DeSerilizeInbuf = -9005,
-        DeSerilizeOutbuf = -9006,
-        ClientCall = -9007,
+        SerializeInbuf = -9003,
+        SerializeOutbuf = -9004,
+        DeSerializeInbuf = -9005,
+        DeSerializeOutbuf = -9006,
+        InternalErr = -9007,
+        CreateSocketFail = -9009,
+        ConnectFail = -9010,
+        WriteFail = -9011,
+        ReadFail = -9012,
     };
 
 };

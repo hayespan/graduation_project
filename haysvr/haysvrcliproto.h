@@ -3,7 +3,6 @@
 #include <string>
 
 #include "haybuf.h"
-#include "tcpchannel.h"
 
 using std::string;
 
@@ -23,8 +22,7 @@ class HaysvrCliProto {
 
 public:
     HaysvrCliProto();
-    int DoProtoCall(TcpChannel & oTcpChannel, int iCmd, const HayBuf & inbuf, HayBuf & outbuf);
-    // int DoProtoCall(UdpChannel & oUdpChannel, int iCmd, const HayBuf & inbuf, HayBuf & outbuf);
+    int DoProtoCall(int iCmd, const HayBuf & inbuf, HayBuf & outbuf);
     int GetResponseCode();
     void SetCliProtoOption(CliProtoOption * pCliProtoOption);
     virtual ~HaysvrCliProto();

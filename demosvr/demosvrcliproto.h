@@ -12,6 +12,6 @@ public:
     DemosvrCliProto();
     virtual ~DemosvrCliProto();
     
-    int Echo(TcpChannel & oTcpChannel, const EchoRequest & req, EchoResponse & resp);    
+    int Echo(const EchoRequest & req, EchoResponse & resp);    
 
 };

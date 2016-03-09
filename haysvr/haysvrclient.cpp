@@ -63,6 +63,13 @@ int HaysvrClient::LoadConfig(const string & sOthConfigPath) {
     if (m_oConfig.GetValue("client", "svr_port", sBuf) == 0) {
         m_oCliProtoOption.iSvrPort = HayComm::StrToInt(sBuf);
     }
+    if (m_oConfig.GetValue("log", "debug_mode", sBuf) == 0) {
+        if (sBuf == "1") {
+            HayComm::g_Logger.SetLogLevel(LOG_DBG);
+        } else {
+            HayComm::g_Logger.SetLogLevel(LOG_WARN);
+        }
+    }
     // if LoadConfig succ, set cliprotooption
     m_pCliProto->SetCliProtoOption(&m_oCliProtoOption);
     return HaysvrErrno::Ok;

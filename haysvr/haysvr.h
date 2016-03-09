@@ -16,7 +16,7 @@ public:
     virtual ~Haysvr();
 
     int LoadConfig(const string & sSvrConfigPath);
-    void SetDispatcher(const HaysvrDispatcher * pDispatcher);
+    void SetDispatcher(HaysvrDispatcher * pDispatcher);
 
     void Daemonize();
     void Singleton();

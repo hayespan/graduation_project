@@ -85,9 +85,16 @@ void Haysvr::ReadOptionFromConfig(TcpSvrOption & oTcpSvrOption, HayComm::Config 
     if (oConfig.GetValue("server", "max_conn_cnt_per_process", sBuf) == 0) {       
         oTcpSvrOption.iMaxConnCntPerPro = HayComm::StrToInt(sBuf);   
     }
+    if (oConfig.GetValue("log", "debug_mode", sBuf) == 0) {
+        if (sBuf == "1") {
+            HayComm::g_Logger.SetLogLevel(LOG_DBG);
+        } else {
+            HayComm::g_Logger.SetLogLevel(LOG_WARN);
+        }
+    }
 }
 
-void Haysvr::SetDispatcher(const HaysvrDispatcher * pDispatcher) {
+void Haysvr::SetDispatcher(HaysvrDispatcher * pDispatcher) {
     if (m_pTcpSvr) {
         m_pTcpSvr->SetDispatcher(pDispatcher);
     }    

@@ -6,9 +6,9 @@
 
 #include "easy_test.h"
 #include "daemonize.h"
-#include "haylog.h"
 #include "config.h"
 #include "file.h"
+#include "log.h"
 
 using namespace std;
 using namespace HayComm;
@@ -24,12 +24,12 @@ TEST_OF(haylog) {
     int x = 1;
     string s = "hello world";
 
-    TEST_ASSERT(HayLog(LOG_INFO, "hayespan test %d %s", x, s.c_str()) == 0);
-    TEST_ASSERT(HayLog(LOG_DBG, "hayespan test DBG") < 0);
-    HayComm::g_Logger.SetLogLevel(LOG_DBG);
-    TEST_ASSERT(HayLog(LOG_DBG, "hayespan test DBG") == 0);
-    HayComm::g_Logger.SetLogLevel(LOG_ERR);
-    TEST_ASSERT(HayLog(LOG_DBG, "hayespan test DBG") < 0);
+    TEST_ASSERT(g_Logger.log(LogLevel::LOG_INFO, "hayespan test %d %s", x, s.c_str()) == 0);
+    TEST_ASSERT(g_Logger.log(LogLevel::LOG_DBG, "hayespan test DBG") < 0);
+    HayComm::g_Logger.SetLogLevel(LogLevel::LOG_DBG);
+    TEST_ASSERT(g_Logger.log(LogLevel::LOG_DBG, "hayespan test DBG") == 0);
+    HayComm::g_Logger.SetLogLevel(LogLevel::LOG_ERR);
+    TEST_ASSERT(g_Logger.log(LogLevel::LOG_DBG, "hayespan test DBG") < 0);
 }
 
 TEST_OF(config) {

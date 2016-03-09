@@ -1,17 +1,21 @@
+
 #include "demosvrmeta.h"
 
 int ToBuf(const EchoRequest & req, HayBuf & inbuf) {
-    return 0;
+    inbuf.m_sBuf = "";
+    return req.SerializeToString(&inbuf.m_sBuf)-1;
 }
 
 int FromBuf(EchoRequest & req, const HayBuf & inbuf) {
-    return 0;
+    return req.ParseFromString(inbuf.m_sBuf)-1;
 }
 
 int ToBuf(const EchoResponse & resp, HayBuf & outbuf) {
-    return 0;
+    outbuf.m_sBuf = "";
+    return resp.SerializeToString(&outbuf.m_sBuf)-1;
 }
 
-int FromBuf(EchoResponse & resp, const HayBuf & inbuf) {
-    return 0;
+int FromBuf(EchoResponse & resp, const HayBuf & outbuf) {
+    return resp.ParseFromString(outbuf.m_sBuf)-1;
 }
+

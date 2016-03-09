@@ -14,35 +14,38 @@ DemosvrCliProto::~DemosvrCliProto() {
 
 }
 
-int DemosvrCliProto::Echo(TcpChannel & oTcpChannel, const EchoRequest & req, EchoResponse & resp) {
+int DemosvrCliProto::Echo(const EchoRequest & req, EchoResponse & resp) {
     int iRet = 0;
     HayBuf inbuf, outbuf;
     // tobuf
     iRet = ToBuf(req, inbuf);
     if (iRet < 0) {
-        HayLog(LOG_ERR, "%s %s inbuf serilize fail. ret[%d]",
+        HayLog(LOG_ERR, "%s %s inbuf serialize fail. ret[%d]",
                 __FILE__, __PRETTY_FUNCTION__, iRet);
-        return HaysvrErrno::SerilizeInbuf;
+        return HaysvrErrno::SerializeInbuf;
     }
+    HayLog(LOG_DBG, "hayespan cliproto inbuf-size[%d]", inbuf.m_sBuf.size());
     iRet = ToBuf(resp, outbuf);
     if (iRet < 0) {
-        HayLog(LOG_ERR, "%s %s outbuf serilize fail. ret[%d]",
+        HayLog(LOG_ERR, "%s %s outbuf serialize fail. ret[%d]",
                 __FILE__, __PRETTY_FUNCTION__, iRet);
-        return HaysvrErrno::SerilizeOutbuf;
+        return HaysvrErrno::SerializeOutbuf;
     }
+    HayLog(LOG_DBG, "hayespan cliproto outbuf-size[%d] outbuf[%c%c%c]", outbuf.m_sBuf.size(),
+            outbuf.m_sBuf[0], outbuf.m_sBuf[1], outbuf.m_sBuf[3]);
     // do call
-    iRet = DoProtoCall(oTcpChannel, DemosvrMethodCmd::Echo, inbuf, outbuf);
+    iRet = DoProtoCall(DemosvrMethodCmd::Echo, inbuf, outbuf);
     if (iRet < 0) {
         HayLog(LOG_ERR, "%s %s DoProtoCall fail. ret[%d]",
                 __FILE__, __PRETTY_FUNCTION__, iRet);
-        return HaysvrErrno::ClientCall;
+        return HaysvrErrno::InternalErr;
     }
     // frombuf
     iRet = FromBuf(resp, outbuf);
     if (iRet < 0) {
-        HayLog(LOG_ERR, "%s %s outbuf deserilize fail. ret[%d]",
+        HayLog(LOG_ERR, "%s %s outbuf deserialize fail. ret[%d]",
                 __FILE__, __PRETTY_FUNCTION__, iRet);
-        return HaysvrErrno::DeSerilizeOutbuf;
+        return HaysvrErrno::DeSerializeOutbuf;
     }
     return HaysvrErrno::Ok;
 }
