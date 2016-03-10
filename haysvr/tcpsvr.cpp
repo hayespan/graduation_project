@@ -570,7 +570,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
                         }
                     } else { // write finish
                         HayLog(LOG_DBG, "haysvr master write fd[%d] write-cnt[%d]", iCliFd, pData->iCurWriteLen);
-                        HayLog(LOG_ERR, "normal recycle fd[%d]", iCliFd);
+                        HayLog(LOG_DBG, "normal recycle fd[%d]", iCliFd);
                         goto RECYCLE_CLIFD;
                     }
                 } 
@@ -584,7 +584,7 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
             continue;
 
 RECYCLE_CLIFD:
-            HayLog(LOG_ERR, "all recycle fd[%d]", iCliFd);
+            HayLog(LOG_DBG, "all recycle fd[%d]", iCliFd);
             // client close fd
             m_iCurConnCnt--;
             close(iCliFd);

@@ -83,10 +83,15 @@ int Singleton(const string & sPidPath, int iPid) {
         close(iFd);
         return -3;
     }
-    ftruncate(iFd, 0);
+    int iRet = ftruncate(iFd, 0);
+    if (iRet == -1) {
+        return -4;
+    }
     char lsBuf[16] = {0};
     sprintf(lsBuf, "%ld", (long)iPid);
-    write(iFd, lsBuf, strlen(lsBuf)+1);
+    if (write(iFd, lsBuf, strlen(lsBuf)+1) != (int)(strlen(lsBuf)+1)) {
+        return -5;    
+    }
     fsync(iFd);
     // here cannot close fd
     return 0;
