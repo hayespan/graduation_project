@@ -704,10 +704,9 @@ void RunWorker(int iMasterEpFd, MyQueue<struct ConnData * > * pQueue, HaysvrDisp
     // write(iFileFd, pData->sData.data(), pData->sData.size());
     // close(iFileFd);
 
-    AddToEpoll(iMasterEpFd, iCliFd, EPOLLET|EPOLLOUT, false);
-
     HayLog(LOG_INFO, "haysvr worker end processing fd. cmd[%d] fd[%d]",
             pData->tMetaData.iCmd, iCliFd);
+    AddToEpoll(iMasterEpFd, iCliFd, EPOLLET|EPOLLOUT, false);
 }
 
 // worker logic
