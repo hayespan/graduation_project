@@ -263,8 +263,11 @@ void TcpSvr::Run() {
     // monitor signal and masters
     struct epoll_event lEvs[iFdCnt]; 
     while (1) {
-        int iRet = epoll_wait(iMonitorEpFd, lEvs, iFdCnt, 5000);
-        if (iRet < 0) { // epoll error
+        int iRet = 0;
+        do {
+            iRet = epoll_wait(iMonitorEpFd, lEvs, iFdCnt, 5000);
+        } while (iRet == -1 && errno == EINTR); // should ignore EINTR
+        if (iRet < 0) { // other epoll error
             HayLog(LOG_FATAL, "haysvr epoll_wait fail. err[%s]",
                     strerror(errno));
             MONITOR_ERR_EXIT;
@@ -386,7 +389,10 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
         }
 
         HayLog(LOG_DBG, "xxx1");
-        int iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 500);
+        int iRet = 0;
+        do {
+            iRet = epoll_wait(iMasterEpFd, lEvs, ilEvLen, 500);
+        } while (iRet == -1 && errno == EINTR);
         if (iRet < 0) {
             HayLog(LOG_FATAL, "haysvr master epoll_wait fail. ret[%d] err[%s]", iRet, strerror(errno));
             MASTER_ERR_EXIT;
