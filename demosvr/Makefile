@@ -19,6 +19,9 @@ libdemosvrclient.so: $(CLI_OBJS)
 libdemosvrclient.a: $(CLI_OBJS)
 	$(AR_STATIC)
 
+demosvr: CXXFLAGS += -static
+demosvr: INCLS = 
+demosvr: DEPS = -lprotobuf -L$(STATIC_DIR) -lhaysvr -lhaycomm -lpthread
 demosvr: $(SVR_OBJS) 
 	$(CXX_EXE)
 
