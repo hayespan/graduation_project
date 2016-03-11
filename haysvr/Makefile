@@ -1,6 +1,6 @@
 include ../Makefile.comm
 
-COMM_OBJS = haybuf.o metadata.o
+COMM_OBJS = haybuf.o metadata.o haysvrutil.o
 CLI_OBJS = haysvrclient.o haysvrcliproto.o $(COMM_OBJS)
 SVR_OBJS = haysvr.o haysvrdispatcher.o tcpsvr.o $(COMM_OBJS)
 

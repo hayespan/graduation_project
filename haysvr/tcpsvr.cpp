@@ -18,6 +18,7 @@
 #include "haycomm/file.h"
 #include "haycomm/time_util.h"
 
+#include "haysvrutil.h"
 #include "haylog.h"
 #include "tcpsvr.h"
 #include "metadata.h"
@@ -31,41 +32,6 @@
 
 using std::vector;
 using std::list;
-
-// static func
-int AddSigHandler(int iSig, sighandler_t pfSigHandler) {
-    struct sigaction sa;
-    memset(&sa, '\0', sizeof(sa));
-    sa.sa_handler = pfSigHandler;
-    sa.sa_flags |= SA_RESTART;
-    sigfillset(&sa.sa_mask);
-    return sigaction(iSig, &sa, NULL);
-}
-
-int AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock) {
-    struct epoll_event tEv;
-    tEv.data.fd = iFd;
-    tEv.events = iEv;
-
-    if (bNonBlock) {
-        if (HayComm::SetNonblocking(iFd) == -1) {
-            // HayLog(LOG_ERR, "haysvr setnonblocking fail. fd[%d] err[%s]",
-                    // iFd, strerror(errno));
-            return -1;
-        }
-    }
-    if (epoll_ctl(iEpFd, EPOLL_CTL_ADD, iFd, &tEv) == -1) {
-        // HayLog(LOG_ERR, "haysvr epoll_add fail. fd[%d] err[%s]",
-                // iFd, strerror(errno));
-        return -2;
-    }
-    return 0;
-} 
-
-int DelFromEpoll(int iEpFd, int iFd) {
-    return epoll_ctl(iEpFd, EPOLL_CTL_DEL, iFd, NULL);
-}
-
 
 // TcpSvrOption
 TcpSvrOption::TcpSvrOption() {
@@ -564,6 +530,9 @@ void TcpSvr::RunMaster(int iListenFd, pthread_mutex_t * pMmapLock, int iRdFd, in
                                         iCliFd, strerror(errno));
                             }
 
+                        } else if (iWcnt == 0) {
+                            // peer close
+                            goto RECYCLE_CLIFD;
                         } else {
                             pData->iCurWriteLen += iWcnt;
                             pData->iLastTime = HayComm::GetNowTimestamp();

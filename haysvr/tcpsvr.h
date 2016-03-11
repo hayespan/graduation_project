@@ -14,10 +14,6 @@
 #include "haybuf.h"
 #include "metadata.h"
 
-int AddSigHandler(int iSig, sighandler_t pfSigHandler);
-int AddToEpoll(int iEpFd, int iFd, int iEv, bool bNonBlock=true);
-int DelFromEpoll(int iEpFd, int iFd);
-
 class TcpSvrOption { // option stored in haysvr
 public:
     TcpSvrOption();

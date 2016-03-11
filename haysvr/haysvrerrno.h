@@ -15,6 +15,12 @@ struct HaysvrErrno {
         ConnectFail = -9010,
         WriteFail = -9011,
         ReadFail = -9012,
+        CreateEpollFail = -9013,
+        SetNonblockFail = -9014,
+        ConnectTimeout = -9015,
+        EpollWaitFail = -9016,
+        UnExpectErr = -9017,
+        ReadTimeout = -9018,
     };
 
 };
