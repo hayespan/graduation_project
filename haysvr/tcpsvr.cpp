@@ -625,10 +625,12 @@ pthread_mutex_t * TcpSvr::CreateMmapLock() {
 
 void RunWorker(int iMasterEpFd, MyQueue<struct ConnData * > * pQueue, HaysvrDispatcher * pDispatcher) {
 
+    pthread_t iPtId = pthread_self();
     // get conndata from queue
     struct ConnData * pData;
     pQueue->pop(pData); // block until get data
-    HayLog(LOG_INFO, "haysvr worker get task. fd[%d]", pData->iFd);
+    HayLog(LOG_INFO, "haysvr worker get task. ptid[%lu] fd[%d]", 
+            iPtId, pData->iFd);
     
     int iCliFd = pData->iFd;
     size_t iMetaDataLen = sizeof(struct MetaData);
@@ -673,8 +675,8 @@ void RunWorker(int iMasterEpFd, MyQueue<struct ConnData * > * pQueue, HaysvrDisp
     // write(iFileFd, pData->sData.data(), pData->sData.size());
     // close(iFileFd);
 
-    HayLog(LOG_INFO, "haysvr worker end processing fd. cmd[%d] fd[%d]",
-            pData->tMetaData.iCmd, iCliFd);
+    HayLog(LOG_INFO, "haysvr worker end processing fd. cmd[%d] ptid[%lu] fd[%d]",
+            pData->tMetaData.iCmd, iPtId, iCliFd);
     AddToEpoll(iMasterEpFd, iCliFd, EPOLLET|EPOLLOUT, false);
 }
 
