@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
+#include "log.h"
 
 using namespace std;
 
@@ -18,27 +19,30 @@ public:
     }
 
     int push(const DataType &d) {
+
         pthread_mutex_lock(&_mutex);
-        while (_nready >= count)
+        while (_nready >= count) {
             pthread_cond_wait(&_not_full_cond, &_mutex);
+        }
 
         _queue.push_back(d);
         _nready++;
-        pthread_cond_signal(&_not_empty_cond);
         pthread_mutex_unlock(&_mutex);
+        pthread_cond_signal(&_not_empty_cond);
         return 0;
     }
 
     int pop(DataType &d) {
         pthread_mutex_lock(&_mutex);
-        while (_nready <= 0)
+        while (_nready <= 0) {
             pthread_cond_wait(&_not_empty_cond, &_mutex);
+        }
 
         d = _queue.front();
         _queue.pop_front();
         _nready--;
-        pthread_cond_signal(&_not_full_cond);
         pthread_mutex_unlock(&_mutex);
+        pthread_cond_signal(&_not_full_cond);
         return 0;
     }
 
